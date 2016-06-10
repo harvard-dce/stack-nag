@@ -1,0 +1,12 @@
+{
+  "name": "StackNag",
+  "description": "Nags about running opsworks dev clusters",
+  "region": "us-east-1",
+  "handler": "function.lambda_handler",
+  "ignore": [
+    ".git",
+    "/*.pyc"
+  ],
+  "timeout": 30,
+  "memory": 128
+}
