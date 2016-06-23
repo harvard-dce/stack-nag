@@ -19,7 +19,7 @@ def lambda_handler(event, context):
 
     def post_message(msg):
         req_body = {
-            'notify': False,
+            'notify': True,
             'format': 'text',
             'message': msg
         }
