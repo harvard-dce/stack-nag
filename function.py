@@ -2,6 +2,7 @@
 import json
 import boto3
 import urllib2
+import jmespath
 
 from ConfigParser import ConfigParser
 
@@ -18,6 +19,7 @@ def lambda_handler(event, context):
 
     opsworks = boto3.client('opsworks')
     cw = boto3.client('cloudwatch')
+    ec2 = boto3.client('ec2')
 
     config = ConfigParser()
     config.read('config.cfg')
@@ -33,22 +35,31 @@ def lambda_handler(event, context):
         req.add_header('Content-Type', 'application/json')
         urllib2.urlopen(req, json.dumps(req_body))
 
-    running_stacks = []
+    stack_info = []
 
     for stack in opsworks.describe_stacks()['Stacks']:
         logger.info("Checking stack %s", stack['Name'])
         instances = opsworks.describe_instances(StackId=stack['StackId'])['Instances']
-        running_instances = [x for x in instances if x['Status'] == 'online']
-        if running_instances:
-            running_stacks.append((stack['Name'], len(running_instances)))
+        online_instances = [x for x in instances if x['Status'] == 'online']
+        instance_cost = sum(get_instance_cost(x) for x in instances)
+        stack_info.append({
+            'name': stack['Name'],
+            'online_instances': len(online_instances),
+            'cost': instance_cost
+        })
+
+    online_stacks = [x for x in stack_info if x['running_instances']]
 
     if event['action'] == 'post':
-        if running_stacks:
-            post_message("%d currently running dev clusters:" % len(running_stacks))
-            for s in running_stacks:
-                post_message("%s: %d instance%s" % (s[0], s[1], s[1] > 1 and "s" or ""))
+
+        if online_stacks:
+            post_message("%d currently online dev clusters:" % len(online_stacks))
+            for s in online_stacks:
+                post_message("%s: %d instance%s" %
+                             (s['name'], s['online_instances'], s['online_instances'] > 1 and "s" or ""))
         else:
             post_message("No running dev clusters")
+
     elif event['action'] == 'metrics':
         # publish metrics
         cw.put_metric_data(
@@ -56,12 +67,15 @@ def lambda_handler(event, context):
             MetricData=[
                 {
                     'MetricName': 'running_clusters',
-                    'Value': len(running_stacks),
+                    'Value': len(online_stacks),
                     'Unit': 'Count'
                 }
             ]
         )
 
+def get_instance_cost(inst):
+    instance_type = inst['InstanceType']
+    price_data = json.read(open('index.json', 'r'))
 
 
 # for local testing
