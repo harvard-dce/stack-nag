@@ -4,9 +4,16 @@
   "region": "us-east-1",
   "handler": "function.lambda_handler",
   "ignore": [
+    "config/",
     ".git",
-    "/*.pyc"
+    "/*.pyc",
+    "/*.zip",
+    "README.md",
+    "fabfile.py",
+    ".idea",
+    ".gitignore",
+    "config.cfg.dist"
   ],
   "timeout": 30,
-  "memory": 128
+  "memory": 512
 }
