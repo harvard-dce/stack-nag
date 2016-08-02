@@ -36,7 +36,7 @@ def lambda_handler(event, context):
         logger.info("Checking stack %s", stack['Name'])
         instances = opsworks.describe_instances(StackId=stack['StackId'])['Instances']
         online_instances = [x for x in instances if x['Status'] == 'online']
-        instance_cost = sum(get_instance_cost(x['InstanceType']) for x in instances)
+        instance_cost = sum(get_instance_cost(x['InstanceType']) for x in online_instances)
         stack_info.append({
             'name': stack['Name'],
             'online_instances': len(online_instances),
