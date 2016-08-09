@@ -48,7 +48,9 @@ def generate_index():
                            "| [?sku=='%s'].priceDimensions.*[].pricePerUnit"
                            "| [0].USD"
                            ) % product['sku']
-            instance_type = product['instanceType']
+            instance_type = product['attributes']['instanceType']
+            if instance_type in price_index[service]:
+                raise RuntimeError("Duplicate instance type: " + instance_type)
             price_index[service][instance_type] = float(jmespath.search(price_query, price_data))
 
         with open('price_index.json', 'w') as f:

@@ -12,7 +12,8 @@
     "fabfile.py",
     ".idea",
     ".gitignore",
-    "config.cfg.dist"
+    "config.cfg.dist",
+    "requirements.txt"
   ],
   "timeout": 30,
   "memory": 512
