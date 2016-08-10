@@ -1,5 +1,6 @@
+import os
 
-from fabric.api import local
+from fabric.api import local, prompt
 from fabric.colors import cyan
 import requests
 import jmespath
@@ -61,9 +62,20 @@ def _copy_config(alias):
 
 def _lambda_uploader(alias, alias_desc, upload=True):
     _copy_config(alias)
-    cmd = ('lambda-uploader -V --profile ${AWS_DEFAULT_PROFILE} '
-          '--role ${STACK_NAG_ROLE_ARN} '
-          '--alias %s --alias-description "%s"') % (alias, alias_desc)
+
+    if 'AWS_DEFAULT_PROFILE' in os.environ:
+        profile = ' --profile %s' % os.environ['AWS_DEFAULT_PROFILE']
+    else:
+        profile = ''
+
+    if 'STACK_NAG_ROLE_ARN' not in os.environ:
+        role_arn = prompt('Enter the Lambda function\'s AIM role ARN: ')
+    else:
+        role_arn = os.environ['STACK_NAG_ROLE_ARN']
+
+    cmd = 'lambda-uploader -V %s --role %s --alias %s --alias-description "%s"' \
+          % (profile, role_arn, alias, alias_desc)
+
     if not upload:
         cmd += ' --no-upload'
     local(cmd)

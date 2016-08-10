@@ -2,4 +2,4 @@
 notify_url=
 
 [cloudwatch]
-namespace=
+namespace=StackNag
