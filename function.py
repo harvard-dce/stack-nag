@@ -160,8 +160,8 @@ class Stack(object):
                 self._rds = rds.describe_db_instances(
                     DBInstanceIdentifier=opsworks_db['DbInstanceIdentifier']
                 )['DBInstances'][0]
-            except IndexError:
-                logger.warning("No rds instance found for stack %s", self.Name)
+            except (ClientError, IndexError):
+                logger.info("No rds instance found for stack %s", self.Name)
                 self._rds = None
         return self._rds
 
