@@ -1,5 +1,0 @@
-[hipchat]
-notify_url=
-
-[cloudwatch]
-namespace=StackNag
