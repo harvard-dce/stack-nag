@@ -139,13 +139,16 @@ def __create_or_update(ctx, op):
                "ParameterKey=LambdaCodeBucket,ParameterValue={} "
                "ParameterKey=NotifyUrl,ParameterValue={} "
                "ParameterKey=CWNamespace,ParameterValue={} "
+               "ParameterKey=NotifyScheduleExpression,ParameterValue=\"{}\""
                .format(profile_arg(),
                        op,
                        STACK_NAME,
                        getenv('LAMBDA_CODE_BUCKET'),
                        getenv('NOTIFY_URL'),
-                       getenv('CLOUDWATCH_NAMESPACE'))
+                       getenv('CLOUDWATCH_NAMESPACE'),
+                       getenv('NOTIFY_SCHEDULE_EXPRESSION').replace(',', 'x'))
                )
+
         ctx.run(cmd)
 
 

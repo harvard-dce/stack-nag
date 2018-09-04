@@ -8,6 +8,8 @@ Parameters:
     Type: String
   CWNamespace:
     Type: String
+  NotifyScheduleExpression:
+    Type: String
 
 Resources:
 
@@ -57,7 +59,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub "${AWS::StackName}-post-trigger"
-      ScheduleExpression: cron(0 20,0 * * ? *)
+      ScheduleExpression: !Join [',', !Split ['x', !Ref NotifyScheduleExpression]]
       State: ENABLED
       Targets:
         - Arn: !Sub "${StackNagFunction.Arn}"
