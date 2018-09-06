@@ -20,6 +20,6 @@ Incoming Webhook URL:
 
 3. (Optional) run invoke -l to see a list of all available tasks + descriptions
 
-4. Run `invoke create-code-bucket` to create the S3 bucket to hold the Lambda code.
+4. Create the S3 a bucket to hold the Lambda code if it does not already exist.
 
 5. Run `invoke stack.create` to create the CloudFormation stack.

@@ -15,25 +15,18 @@ AWS_PROFILE = env('AWS_PROFILE')
 
 
 @task
-def create_code_bucket(ctx):
-    """
-    Create the s3 bucket for storing packaged lambda code
-    """
-    code_bucket = getenv('LAMBDA_CODE_BUCKET')
-    cmd = "aws {} s3 ls {}".format(profile_arg(), code_bucket)
-    exists = ctx.run(cmd, hide=True, warn=True)
-    if exists.ok:
-        print("Bucket exists!")
-    else:
-        cmd = "aws {} s3 mb s3://{}".format(profile_arg(), code_bucket)
-        ctx.run(cmd)
-
-
-@task
 def create(ctx):
     """
     Generate price index and create CloudFormation stack
     """
+    code_bucket = getenv('LAMBDA_CODE_BUCKET')
+    cmd = "aws {} s3 ls {}".format(profile_arg(), code_bucket)
+    exists = ctx.run(cmd, hide=True, warn=True)
+    if not exists.ok:
+        print("Lambda code bucket does not exist. "
+              "Specify an existing S3 bucket as the \"LAMBDA_CODE_BUCKET.\"")
+        return
+
     __generate_index(ctx)
     __create_or_update(ctx, "create")
 
@@ -47,18 +40,26 @@ def update(ctx):
 def update_lambda(ctx):
     __package(ctx)
     ctx.run("aws {} lambda update-function-code "
-            "--function-name {} --s3-bucket {} --s3-key {}"
+            "--function-name {} --s3-bucket {} --s3-key {}/stack-nag.zip"
             .format(profile_arg(),
                     "stack-nag-function",
                     getenv('LAMBDA_CODE_BUCKET'),
-                    "stack-nag.zip"))
+                    STACK_NAME)
+            )
 
 
 @task
 def delete(ctx):
     cmd = "aws {} cloudformation delete-stack --stack-name {}"\
-          .format(profile_arg(), STACK_NAME)
-    ctx.run(cmd)
+        .format(profile_arg(), STACK_NAME)
+    res = ctx.run(cmd)
+
+    if res.exited == 0:
+        __wait_for(ctx, "delete")
+
+    cmd = "aws {} s3 rm s3://{}/{}/stack-nag.zip"\
+        .format(profile_arg(), getenv("LAMBDA_CODE_BUCKET"), STACK_NAME)
+    res = ctx.run(cmd)
 
 
 @task
@@ -92,8 +93,6 @@ PRICE_INDEX_CONFIG = {
 
 
 ns = Collection()
-ns.add_task(create_code_bucket)
-
 ns.add_task(refresh_index)
 
 stack_ns = Collection('stack')
@@ -149,7 +148,10 @@ def __create_or_update(ctx, op):
                        getenv('NOTIFY_SCHEDULE_EXPRESSION').replace(',', 'x'))
                )
 
-        ctx.run(cmd)
+        res = ctx.run(cmd)
+
+        if res.exited == 0:
+            __wait_for(ctx, op)
 
 
 def __package(ctx):
@@ -181,11 +183,21 @@ def __package(ctx):
     with ctx.cd(build_path):
         ctx.run("zip -r {} . {}".format(zip_path, '../price_index.json'))
 
-    ctx.run("aws {} s3 cp {} s3://{}".format(
+    ctx.run("aws {} s3 cp {} s3://{}/{}/stack-nag.zip".format(
         profile_arg(),
         zip_path,
-        getenv('LAMBDA_CODE_BUCKET'))
+        getenv('LAMBDA_CODE_BUCKET'),
+        STACK_NAME,
+        )
     )
+
+
+def __wait_for(ctx, op):
+    wait_cmd = ("aws {} cloudformation wait stack-{}-complete "
+                "--stack-name {}").format(profile_arg(), op, STACK_NAME)
+    print("Waiting for stack {} to complete...".format(op))
+    ctx.run(wait_cmd)
+    print("Done")
 
 
 def __generate_index(ctx):
