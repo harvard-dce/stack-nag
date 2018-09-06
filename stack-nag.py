@@ -23,7 +23,8 @@ cw = boto3.client('cloudwatch')
 ec2 = boto3.client('ec2')
 rds = boto3.client('rds')
 s3 = boto3.resource('s3')
-NOTIFY_URL = env("NOTIFY_URL")
+PRICE_NOTIFY_URL = env("PRICE_NOTIFY_URL")
+CODEBUILD_NOTIFY_URL = env("CODEBUILD_NOTIFY_URL")
 
 YELLOW = "#EBB424"
 GREEN = "#49C39E"
@@ -82,7 +83,7 @@ def handler(event, context):
         msg += "Total usage cost (including non-running stacks): ${:.2f}/hr"\
                .format(total_hourly_cost)
 
-        post_message(msg, color=YELLOW)
+        post_message(msg, PRICE_NOTIFY_URL, color=YELLOW)
 
     elif 'action' in event and event['action'] == 'metrics':
 
@@ -137,7 +138,7 @@ def handler(event, context):
         else:
             raise RuntimeError("Received invalid event: {}".format(event))
 
-        post_message(msg, color=GREEN)
+        post_message(msg, CODEBUILD_NOTIFY_URL, color=GREEN)
 
     else:
         raise RuntimeError("Received invalid event: {}".format(event))
@@ -249,7 +250,7 @@ class Stack(object):
         ])
 
 
-def post_message(msg, color, notify_url=NOTIFY_URL):
+def post_message(msg, notify_url, color):
     req_body = {'attachments': [{'color': color, 'text': msg}]}
     logger.info("using notify_url: %s", notify_url)
     logger.info("posting message: %s", msg)

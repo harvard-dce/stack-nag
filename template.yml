@@ -4,7 +4,9 @@ Description: StackNag Slack Notifications App
 Parameters:
   LambdaCodeBucket:
     Type: String
-  NotifyUrl:
+  PriceNotifyUrl:
+    Type: String
+  CodeBuildNotifyUrl:
     Type: String
   CWNamespace:
     Type: String
@@ -50,7 +52,8 @@ Resources:
       Environment:
         Variables:
           NAMESPACE: !Ref CWNamespace
-          NOTIFY_URL: !Ref NotifyUrl
+          PRICE_NOTIFY_URL: !Ref PriceNotifyUrl
+          CODEBUILD_NOTIFY_URL: !Ref CodeBuildNotifyUrl
       Code:
         S3Bucket: !Ref LambdaCodeBucket
         S3Key: !Sub "${AWS::StackName}/stack-nag.zip"

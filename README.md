@@ -15,6 +15,9 @@ a total hourly cost, number of running stacks and total stacks.
 Incoming Webhook URL:
 
     https://api.slack.com/incoming-webhooks
+    
+    In order to post to different slack channels, separate Slack Apps must be
+    created for each type of notification.
 
 2. Copy example.env to .env and fill it in.
 
