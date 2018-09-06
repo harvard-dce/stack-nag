@@ -1,14 +1,12 @@
-
 import os
 import re
 import json
 import boto3
-import urllib2
 import argparse
+import requests
 from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
-
-from ConfigParser import ConfigParser
+from os import getenv as env
 
 import logging
 logger = logging.getLogger()
@@ -25,6 +23,11 @@ cw = boto3.client('cloudwatch')
 ec2 = boto3.client('ec2')
 rds = boto3.client('rds')
 s3 = boto3.resource('s3')
+PRICE_NOTIFY_URL = env("PRICE_NOTIFY_URL")
+CODEBUILD_NOTIFY_URL = env("CODEBUILD_NOTIFY_URL")
+
+YELLOW = "#EBB424"
+GREEN = "#49C39E"
 
 try:
     with open('price_index.json', 'r') as f:
@@ -32,13 +35,14 @@ try:
 except IOError:
     raise RuntimeError("Price index is missing. Did you run `fab generate_index`?")
 
+
 def instance_price(service, instance_type):
     return price_index[service][instance_type]
 
 # get all this up-front as it's rather expensive
 BUCKET_TAG_INDEX = {}
 for bucket in s3.buckets.all():
-    logger.debug("Generting bucket tag index")
+    logger.debug("Generating bucket tag index")
     try:
         for tag in bucket.Tagging().tag_set:
             if tag['Key'] == 'opsworks:stack':
@@ -48,16 +52,10 @@ for bucket in s3.buckets.all():
     except ClientError:
         pass
 
-def lambda_handler(event, context):
+
+def handler(event, context):
 
     logger.info("Event received: %s", str(event))
-
-    if 'action' not in event:
-        raise RuntimeError("Recieved invalid event")
-
-    config = ConfigParser()
-    config_file = os.environ.get('STACK_NAG_CONFIG', 'config.cfg')
-    config.read(config_file)
 
     stacks = []
 
@@ -68,27 +66,29 @@ def lambda_handler(event, context):
 
     running_stacks = [x for x in stacks if x.online_instances]
 
-    if event['action'] == 'post':
-        notify_url = config.get('hipchat', 'notify_url')
+    if 'action' in event and event['action'] == 'post stack status':
+
         if running_stacks:
-            post_message(notify_url, "%d currently running stacks:" % len(running_stacks))
+            msg = "{} currently running stacks:\n".format(len(running_stacks))
             for stack in running_stacks:
-                msg = "%s: %d instance%s, $%.2f/hr" % (
-                    stack.Name,
-                    len(stack.online_instances),
-                    len(stack.online_instances) > 1 and "s" or "",
-                    stack.hourly_cost()
-                )
-                post_message(notify_url, msg)
+                msg += "{}: {} instance{}, ${:.2f}/hr\n"\
+                       .format(stack.Name,
+                               len(stack.online_instances),
+                               len(stack.online_instances) > 1 and "s" or "",
+                               stack.hourly_cost())
         else:
-            post_message(notify_url, "No running stacks")
+            msg = "No running stacks\n"
 
         total_hourly_cost = sum(s.hourly_cost() for s in stacks)
-        post_message(notify_url, "Total usage cost (including non-running stacks): $%.2f/hr" % total_hourly_cost)
+        msg += "Total usage cost (including non-running stacks): ${:.2f}/hr"\
+               .format(total_hourly_cost)
 
-    elif event['action'] == 'metrics':
+        post_message(msg, PRICE_NOTIFY_URL, color=YELLOW)
 
-        namespace = config.get('cloudwatch', 'namespace')
+    elif 'action' in event and event['action'] == 'metrics':
+
+        namespace = env('NAMESPACE')
+        logger.info("Logging metrics to namespace: {}".format(namespace))
 
         # publish metrics
         cw.put_metric_data(
@@ -127,6 +127,23 @@ def lambda_handler(event, context):
             ]
         )
 
+    elif 'source' in event and event['source'] == 'aws.codebuild':
+        project_name = event['detail']['project-name']
+
+        if event['detail']['current-phase'] == "SUBMITTED":
+            msg = "CodeBuild submitted for {}".format(project_name)
+        elif event['detail']['current-phase'] == "COMPLETED":
+            status = event['detail']['build-status']
+            msg = "CodeBuild for {} status: {}".format(project_name, status)
+        else:
+            raise RuntimeError("Received invalid event: {}".format(event))
+
+        post_message(msg, CODEBUILD_NOTIFY_URL, color=GREEN)
+
+    else:
+        raise RuntimeError("Received invalid event: {}".format(event))
+
+
 class Stack(object):
 
     def __init__(self, data):
@@ -150,6 +167,8 @@ class Stack(object):
 
     @property
     def online_instances(self):
+        for x in self.instances:
+            logger.info(x)
         return [x for x in self.instances if x['Status'] == 'online']
 
     @property
@@ -188,8 +207,8 @@ class Stack(object):
             Namespace='AWS/S3',
             MetricName='BucketSizeBytes',
             Dimensions=[
-                { 'Name': 'BucketName', 'Value': bucket_name },
-                { 'Name': 'StorageType', 'Value': 'StandardStorage' }
+                {'Name': 'BucketName', 'Value': bucket_name},
+                {'Name': 'StorageType', 'Value': 'StandardStorage'}
             ],
             StartTime=datetime.now() - timedelta(days=1),
             EndTime=datetime.now(),
@@ -231,17 +250,14 @@ class Stack(object):
         ])
 
 
-def post_message(notify_url, msg):
-    req_body = {
-        'notify': True,
-        'format': 'text',
-        'message': msg
-    }
+def post_message(msg, notify_url, color):
+    req_body = {'attachments': [{'color': color, 'text': msg}]}
     logger.info("using notify_url: %s", notify_url)
-    logger.info("posting messge: %s", msg)
-    req = urllib2.Request(notify_url)
-    req.add_header('Content-Type', 'application/json')
-    urllib2.urlopen(req, json.dumps(req_body))
+    logger.info("posting message: %s", msg)
+    r = requests.post(notify_url,
+                      headers={'Content-Type': 'application/json'},
+                      json=req_body)
+    logger.info("Notify url status code: {}".format(r.status_code))
 
 
 # for local testing
@@ -252,4 +268,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    lambda_handler({'action': args.action}, None)
+    handler({'action': args.action}, None)
