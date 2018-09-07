@@ -40,9 +40,9 @@ def update(ctx):
 def update_lambda(ctx):
     __package(ctx)
     ctx.run("aws {} lambda update-function-code "
-            "--function-name {} --s3-bucket {} --s3-key {}/stack-nag.zip"
+            "--function-name {}-function --s3-bucket {} --s3-key {}/stack-nag.zip"
             .format(profile_arg(),
-                    "stack-nag-function",
+                    STACK_NAME,
                     getenv('LAMBDA_CODE_BUCKET'),
                     STACK_NAME)
             )

@@ -129,12 +129,15 @@ def handler(event, context):
 
     elif 'source' in event and event['source'] == 'aws.codebuild':
         project_name = event['detail']['project-name']
+        revision = event['detail']['additional-information']['source-version']
 
         if event['detail']['current-phase'] == "SUBMITTED":
-            msg = "CodeBuild submitted for {}".format(project_name)
+            msg = "CodeBuild submitted for {}@{}"\
+                .format(project_name, revision)
         elif event['detail']['current-phase'] == "COMPLETED":
             status = event['detail']['build-status']
-            msg = "CodeBuild for {} status: {}".format(project_name, status)
+            msg = "CodeBuild for {}@{} status: {}"\
+                .format(project_name, revision, status)
         else:
             raise RuntimeError("Received invalid event: {}".format(event))
 
