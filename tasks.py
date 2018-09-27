@@ -59,7 +59,7 @@ def delete(ctx):
 
     cmd = "aws {} s3 rm s3://{}/{}/stack-nag.zip"\
         .format(profile_arg(), getenv("LAMBDA_CODE_BUCKET"), STACK_NAME)
-    res = ctx.run(cmd)
+    ctx.run(cmd)
 
 
 @task

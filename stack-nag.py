@@ -25,6 +25,7 @@ rds = boto3.client('rds')
 s3 = boto3.resource('s3')
 PRICE_NOTIFY_URL = env("PRICE_NOTIFY_URL")
 CODEBUILD_NOTIFY_URL = env("CODEBUILD_NOTIFY_URL")
+NAMESPACE = env('NAMESPACE')
 
 YELLOW = "#EBB424"
 GREEN = "#49C39E"
@@ -55,19 +56,20 @@ for bucket in s3.buckets.all():
 
 def handler(event, context):
 
-    logger.info("Event received: %s", str(event))
+    logger.info("Event received: {}".format(event))
 
     stacks = []
 
     for s in opsworks.describe_stacks()['Stacks']:
         stack = Stack(s)
-        logger.info("Found stack %s", stack.Name)
         stacks.append(stack)
+
+    stack_names = [stack.Name for stack in stacks]
+    logger.info("Found stacks: {}".format(', '.join(stack_names)))
 
     running_stacks = [x for x in stacks if x.online_instances]
 
     if 'action' in event and event['action'] == 'post stack status':
-
         if running_stacks:
             msg = "{} currently running stacks:\n".format(len(running_stacks))
             for stack in running_stacks:
@@ -87,45 +89,48 @@ def handler(event, context):
 
     elif 'action' in event and event['action'] == 'metrics':
 
-        namespace = env('NAMESPACE')
-        logger.info("Logging metrics to namespace: {}".format(namespace))
+        logger.info("Logging metrics to namespace: {}".format(NAMESPACE))
 
-        # publish metrics
+        # publish general metrics
         cw.put_metric_data(
-            Namespace=namespace,
+            Namespace=NAMESPACE,
             MetricData=[
                 {
-                    'MetricName': 'running_clusters',
+                    'MetricName': 'all stacks: running_clusters',
                     'Value': len(running_stacks),
                     'Unit': 'Count'
                 },
                 {
-                    'MetricName': 'total_clusters',
+                    'MetricName': 'all stacks: total_clusters',
                     'Value': len(stacks),
                     'Unit': 'Count'
                 },
                 {
-                    'MetricName': 'ec2_hourly_costs',
+                    'MetricName': 'all stacks: ec2_hourly_costs',
                     'Value': sum(s.ec2_hourly_cost() for s in stacks)
                 },
                 {
-                    'MetricName': 'rds_hourly_costs',
+                    'MetricName': 'all stacks: rds_hourly_costs',
                     'Value': sum(s.rds_hourly_cost() for s in stacks)
                 },
                 {
-                    'MetricName': 'ebs_hourly_costs',
+                    'MetricName': 'all stacks: ebs_hourly_costs',
                     'Value': sum(s.ebs_hourly_cost() for s in stacks)
                 },
                 {
-                    'MetricName': 's3_hourly_costs',
+                    'MetricName': 'all stacks: s3_hourly_costs',
                     'Value': sum(s.s3_hourly_cost() for s in stacks)
                 },
                 {
-                    'MetricName': 'total_hourly_costs',
+                    'MetricName': 'all stacks: total_hourly_costs',
                     'Value': sum(s.hourly_cost() for s in stacks)
                 }
             ]
         )
+
+        # publish individual metrics
+        for s in stacks:
+            publish_metrics(s)
 
     elif 'source' in event and event['source'] == 'aws.codebuild':
         project_name = event['detail']['project-name']
@@ -164,14 +169,14 @@ class Stack(object):
             try:
                 self._instances = opsworks.describe_instances(StackId=self.StackId)['Instances']
             except KeyError:
-                logger.warning("No instances found for stack %s", self.Name)
+                logger.warning("No instances found for stack {}".format(self.Name))
                 self._instances = []
         return self._instances
 
     @property
     def online_instances(self):
         for x in self.instances:
-            logger.info(x)
+            logger.debug("Instance detail: {}".format(x))
         return [x for x in self.instances if x['Status'] == 'online']
 
     @property
@@ -183,7 +188,7 @@ class Stack(object):
                     DBInstanceIdentifier=opsworks_db['DbInstanceIdentifier']
                 )['DBInstances'][0]
             except (ClientError, IndexError):
-                logger.info("No rds instance found for stack %s", self.Name)
+                logger.debug("No rds instance found for stack {}".format(self.Name))
                 self._rds = None
         return self._rds
 
@@ -219,9 +224,13 @@ class Stack(object):
             Statistics=['Average']
         )
         try:
-            return resp['Datapoints'][-1]['Average']
+            if len(resp['Datapoints']) == 0:
+                # no items in bucket
+                return 0
+            else:
+                return resp['Datapoints'][-1]['Average']
         except IndexError:
-            logger.warning("Failed to get size for bucket '%s'", bucket_name)
+            logger.warning("Failed to get size for bucket '{}'".format(bucket_name))
             return 0
 
     def shortname(self):
@@ -255,12 +264,43 @@ class Stack(object):
 
 def post_message(msg, notify_url, color):
     req_body = {'attachments': [{'color': color, 'text': msg}]}
-    logger.info("using notify_url: %s", notify_url)
-    logger.info("posting message: %s", msg)
+    logger.info("using notify_url: {}".format(notify_url))
+    logger.info("posting message: {}".format(msg))
     r = requests.post(notify_url,
                       headers={'Content-Type': 'application/json'},
                       json=req_body)
     logger.info("Notify url status code: {}".format(r.status_code))
+
+
+def publish_metrics(stack):
+
+    logger.debug("publish metrics for {}".format(stack.Name))
+
+    cw.put_metric_data(
+        Namespace=NAMESPACE,
+        MetricData=[
+            {
+                'MetricName': '{}: ec2_hourly_costs'.format(stack.Name),
+                'Value': stack.ec2_hourly_cost()
+            },
+            {
+                'MetricName': '{}: rds_hourly_costs'.format(stack.Name),
+                'Value': stack.rds_hourly_cost()
+            },
+            {
+                'MetricName': '{}: ebs_hourly_costs'.format(stack.Name),
+                'Value': stack.ebs_hourly_cost()
+            },
+            {
+                'MetricName': '{}: s3_hourly_costs'.format(stack.Name),
+                'Value': stack.s3_hourly_cost()
+            },
+            {
+                'MetricName': '{}: total_hourly_costs'.format(stack.Name),
+                'Value': stack.hourly_cost()
+            }
+        ]
+    )
 
 
 # for local testing
