@@ -7,6 +7,7 @@ import requests
 from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
 from os import getenv as env
+import time
 
 import logging
 logger = logging.getLogger()
@@ -92,9 +93,7 @@ def handler(event, context):
         logger.info("Logging metrics to namespace: {}".format(NAMESPACE))
 
         # publish general metrics
-        cw.put_metric_data(
-            Namespace=NAMESPACE,
-            MetricData=[
+        metric_data = [
                 {
                     'MetricName': 'running_clusters',
                     'Value': len(running_stacks),
@@ -126,6 +125,13 @@ def handler(event, context):
                     'Value': sum(s.hourly_cost() for s in stacks)
                 }
             ]
+
+        for metric in metric_data:
+            metric["Timestamp"] = str(time.time())
+
+        cw.put_metric_data(
+            Namespace=NAMESPACE,
+            MetricData=metric_data
         )
 
         # publish individual metrics
@@ -276,30 +282,36 @@ def publish_metrics(stack):
 
     logger.debug("publish metrics for {}".format(stack.Name))
 
-    cw.put_metric_data(
-        Namespace=NAMESPACE + '-breakdown',
-        MetricData=[
+    metric_data = [
             {
-                'MetricName': '{}: ec2_hourly_costs'.format(stack.Name),
+                'MetricName': 'ec2_hourly_costs'.format(stack.Name),
                 'Value': stack.ec2_hourly_cost()
             },
             {
-                'MetricName': '{}: rds_hourly_costs'.format(stack.Name),
+                'MetricName': 'rds_hourly_costs'.format(stack.Name),
                 'Value': stack.rds_hourly_cost()
             },
             {
-                'MetricName': '{}: ebs_hourly_costs'.format(stack.Name),
+                'MetricName': 'ebs_hourly_costs'.format(stack.Name),
                 'Value': stack.ebs_hourly_cost()
             },
             {
-                'MetricName': '{}: s3_hourly_costs'.format(stack.Name),
+                'MetricName': 's3_hourly_costs'.format(stack.Name),
                 'Value': stack.s3_hourly_cost()
             },
             {
-                'MetricName': '{}: total_hourly_costs'.format(stack.Name),
+                'MetricName': 'total_hourly_costs'.format(stack.Name),
                 'Value': stack.hourly_cost()
             }
         ]
+
+    for metric in metric_data:
+        metric["Dimensions"] = [{"Name": stack.Name, "Value": stack.Name}]
+        metric["Timestamp"] = str(time.time())
+
+    cw.put_metric_data(
+        Namespace=NAMESPACE,
+        MetricData=metric_data
     )
 
 
