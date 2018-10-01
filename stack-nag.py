@@ -96,33 +96,33 @@ def handler(event, context):
             Namespace=NAMESPACE,
             MetricData=[
                 {
-                    'MetricName': 'all stacks: running_clusters',
+                    'MetricName': 'running_clusters',
                     'Value': len(running_stacks),
                     'Unit': 'Count'
                 },
                 {
-                    'MetricName': 'all stacks: total_clusters',
+                    'MetricName': 'total_clusters',
                     'Value': len(stacks),
                     'Unit': 'Count'
                 },
                 {
-                    'MetricName': 'all stacks: ec2_hourly_costs',
+                    'MetricName': 'ec2_hourly_costs',
                     'Value': sum(s.ec2_hourly_cost() for s in stacks)
                 },
                 {
-                    'MetricName': 'all stacks: rds_hourly_costs',
+                    'MetricName': 'rds_hourly_costs',
                     'Value': sum(s.rds_hourly_cost() for s in stacks)
                 },
                 {
-                    'MetricName': 'all stacks: ebs_hourly_costs',
+                    'MetricName': 'ebs_hourly_costs',
                     'Value': sum(s.ebs_hourly_cost() for s in stacks)
                 },
                 {
-                    'MetricName': 'all stacks: s3_hourly_costs',
+                    'MetricName': 's3_hourly_costs',
                     'Value': sum(s.s3_hourly_cost() for s in stacks)
                 },
                 {
-                    'MetricName': 'all stacks: total_hourly_costs',
+                    'MetricName': 'total_hourly_costs',
                     'Value': sum(s.hourly_cost() for s in stacks)
                 }
             ]
@@ -277,7 +277,7 @@ def publish_metrics(stack):
     logger.debug("publish metrics for {}".format(stack.Name))
 
     cw.put_metric_data(
-        Namespace=NAMESPACE,
+        Namespace=NAMESPACE + '-breakdown',
         MetricData=[
             {
                 'MetricName': '{}: ec2_hourly_costs'.format(stack.Name),
