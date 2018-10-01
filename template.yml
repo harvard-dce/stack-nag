@@ -81,7 +81,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub "${AWS::StackName}-metrics-trigger"
-      ScheduleExpression: rate(1 minute)
+      ScheduleExpression: rate(10 minutes)
       State: ENABLED
       Targets:
       - Arn: !Sub "${StackNagFunction.Arn}"
