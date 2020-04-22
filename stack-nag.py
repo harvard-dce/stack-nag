@@ -39,6 +39,7 @@ except IOError:
 
 
 def instance_price(service, instance_type):
+    logger.debug(price_index)
     return price_index[service][instance_type]
 
 # get all this up-front as it's rather expensive
@@ -57,7 +58,7 @@ for bucket in s3.buckets.all():
 
 def handler(event, context):
 
-    logger.info("Event received: {}".format(event))
+    logger.info(event)
 
     stacks = []
 

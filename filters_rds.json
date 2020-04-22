@@ -1,0 +1,17 @@
+[
+    {
+        "Type": "TERM_MATCH",
+        "Field": "ServiceCode",
+        "Value": "AmazonRDS"
+    },
+    {
+        "Type": "TERM_MATCH",
+        "Field": "location",
+        "Value": "US East (N. Virginia)"
+    },
+    {
+        "Type": "TERM_MATCH",
+        "Field": "databaseEngine",
+        "Value": "MySQL"
+    }
+]

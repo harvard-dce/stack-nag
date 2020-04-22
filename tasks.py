@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 import json
 import requests
 import jmespath
+from pprint import pprint
+import sys
 
 load_dotenv(join(dirname(__file__), '.env'))
 
@@ -69,27 +71,6 @@ def refresh_index(ctx):
     """
     __generate_index(ctx)
     update_lambda(ctx)
-
-
-PRICE_INDEX_CONFIG = {
-  "ec2": {
-    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/index.json",
-    "attributes": {
-      "location": "US East (N. Virginia)",
-      "tenancy": "Shared",
-      "operatingSystem": "Linux",
-      "preInstalledSw": "NA"
-    }
-  },
-  "rds": {
-    "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/index.json",
-    "attributes": {
-      "location": "US East (N. Virginia)",
-      "databaseEngine": "MySQL",
-      "usagetype": "^InstanceUsage"
-    }
-  }
-}
 
 
 ns = Collection()
@@ -205,32 +186,45 @@ def __wait_for(ctx, op):
 def __generate_index(ctx):
 
     price_index = {}
-    for service, data in PRICE_INDEX_CONFIG.items():
+    for service, service_code in [('ec2', 'AmazonEC2'), ('rds', 'AmazonRDS')]:
 
         print('Getting prices for %s...' % service)
+
+        cmd = ("aws {} pricing get-products "
+               "--service-code {} --filters file://filters_{}.json"
+               .format(profile_arg(), service_code, service))
+
+        res = ctx.run(cmd, hide=True).stdout
+        price_list = json.loads(res)['PriceList']
+
         price_index.setdefault(service, {})
-        price_data = requests.get(data['url']).json()
+        for price_data in price_list:
+            price_data = json.loads(price_data)
 
-        product_query = "products.* "
-        for k, v in data['attributes'].items():
-            if v.startswith('^'):
-                # do a starts with exp
-                product_query += " | [?starts_with(attributes.%s, '%s')]" % (k, v[1:])
-            else:
-                product_query += " | [?attributes.%s=='%s']" % (k, v)
+            product = price_data['product']
+            if 'instanceType' not in product['attributes']:
+                print("\nProduct missing instanceType: {}".format(product))
+                continue
+            if service == 'rds' and product['attributes']['engineCode'] == '210':
+                continue
 
-        products = jmespath.search(product_query, price_data)
-        for product in products:
             instance_type = product['attributes']['instanceType']
-            if instance_type in price_index[service]:
-                raise RuntimeError("Duplicate instance type: " + instance_type)
+            sku = product['sku']
 
-            price_query = ("terms.OnDemand.*.*[]"
-                           "| [?sku=='%s'].priceDimensions.*[].pricePerUnit"
-                           "| [0].USD"
-                           ) % product['sku']
+            if service == 'rds':
+                usage_type = product['attributes']['usagetype']
+                if not usage_type.startswith("InstanceUsage"):
+                    continue
 
-            price_index[service][instance_type] = float(jmespath.search(price_query, price_data))
+            for term in price_data['terms']['OnDemand'].values():
+                if term['sku'] == sku:
+                    for price_dimension in term['priceDimensions'].values():
+                        price = float(price_dimension['pricePerUnit']['USD'])
+                        break
+                break
+
+            price_index[service][instance_type] = price
 
         with open('price_index.json', 'w') as f:
             json.dump(price_index, f, indent=True)
+    sys.exit(0)
