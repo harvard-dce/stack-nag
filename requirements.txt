@@ -4,3 +4,6 @@ requests
 python-dotenv
 invoke
 cfn-lint
+black==22.3.0
+flake8==4.0.1
+pre-commit
