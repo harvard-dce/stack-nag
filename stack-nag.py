@@ -13,10 +13,12 @@ import logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+
 if 'AWS_DEFAULT_PROFILE' in os.environ:
     boto3.setup_default_session(
         profile_name=os.environ['AWS_DEFAULT_PROFILE'],
-        region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+        region_name=AWS_REGION,
     )
 
 opsworks = boto3.client('opsworks')
@@ -30,6 +32,7 @@ NAMESPACE = env('NAMESPACE')
 
 YELLOW = "#EBB424"
 GREEN = "#49C39E"
+RED = "#e62727"
 
 try:
     with open('price_index.json', 'r') as f:
@@ -143,17 +146,30 @@ def handler(event, context):
         project_name = event['detail']['project-name']
         revision = event['detail']['additional-information']['source-version']
 
+        build_id = event["detail"]["build-id"]
+        build_id_parts = build_id.split(":", 5)
+        build_region = build_id_parts[3]
+        build_account = build_id_parts[4]
+        build_path = build_id_parts[5]
+        build_link = f"https://{build_region}.console.aws.amazon.com/codesuite/codebuild/{build_account}/projects/{project_name}/{build_path}"
+
         if event['detail']['current-phase'] == "SUBMITTED":
-            msg = "CodeBuild submitted for {}@{}"\
-                .format(project_name, revision)
+            msg = f"CodeBuild submitted for <{build_link}|{project_name}@{revision}>"
+            status = None
         elif event['detail']['current-phase'] == "COMPLETED":
             status = event['detail']['build-status']
-            msg = "CodeBuild for {}@{} status: {}"\
-                .format(project_name, revision, status)
+            msg = f"CodeBuild complete for <{build_link}|{project_name}@{revision}>, status: {status}"
         else:
             raise RuntimeError("Received invalid event: {}".format(event))
 
-        post_message(msg, CODEBUILD_NOTIFY_URL, color=GREEN)
+        if status == "FAILED":
+          status_color = RED
+        elif status == "SUCCEEDED":
+          status_color = GREEN
+        else:
+          status_color = YELLOW
+
+        post_message(msg, CODEBUILD_NOTIFY_URL, color=status_color)
 
     else:
         raise RuntimeError("Received invalid event: {}".format(event))
