@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion : '2010-09-09'
+AWSTemplateFormatVersion: '2010-09-09'
 Description: StackNag Slack Notifications App
 
 Parameters:
@@ -14,41 +14,40 @@ Parameters:
     Type: String
 
 Resources:
-
   StackNagRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${AWS::StackName}-role"
+      RoleName: !Sub '${AWS::StackName}-role'
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
-        - Action: sts:AssumeRole
-          Effect: Allow
-          Principal:
-            Service: lambda.amazonaws.com
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AWSOpsWorksRole"
-        - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
-        - "arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess"
-        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - 'arn:aws:iam::aws:policy/AWSOpsWorks_FullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess'
+        - 'arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       Policies:
-        - PolicyName: !Sub "${AWS::StackName}-policy"
+        - PolicyName: !Sub '${AWS::StackName}-policy'
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
-              - Effect: "Allow"
+              - Effect: 'Allow'
                 Action:
-                  - "cloudwatch:PutMetricData"
-                Resource: "*"
+                  - 'cloudwatch:PutMetricData'
+                Resource: '*'
 
   StackNagFunction:
     Type: AWS::Lambda::Function
     Properties:
       Handler: stack-nag.handler
-      Runtime: python3.6
+      Runtime: python3.8
       Timeout: 300
       Role: !GetAtt [StackNagRole, Arn]
-      FunctionName: !Sub "${AWS::StackName}-function"
+      FunctionName: !Sub '${AWS::StackName}-function'
       Environment:
         Variables:
           NAMESPACE: !Ref CWNamespace
@@ -56,23 +55,24 @@ Resources:
           CODEBUILD_NOTIFY_URL: !Ref CodeBuildNotifyUrl
       Code:
         S3Bucket: !Ref LambdaCodeBucket
-        S3Key: !Sub "${AWS::StackName}/stack-nag.zip"
+        S3Key: !Sub '${AWS::StackName}/stack-nag.zip'
 
   StackNagPostEventRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub "${AWS::StackName}-post-trigger"
-      ScheduleExpression: !Join [',', !Split ['x', !Ref NotifyScheduleExpression]]
+      Name: !Sub '${AWS::StackName}-post-trigger'
+      ScheduleExpression:
+        !Join [',', !Split ['x', !Ref NotifyScheduleExpression]]
       State: ENABLED
       Targets:
-        - Arn: !Sub "${StackNagFunction.Arn}"
-          Id: "StackNagFunction"
-          Input: "{\"action\": \"post stack status\"}"
+        - Arn: !Sub '${StackNagFunction.Arn}'
+          Id: 'StackNagFunction'
+          Input: '{"action": "post stack status"}'
 
   StackNagPostEventRulePermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Sub "${StackNagFunction.Arn}"
+      FunctionName: !Sub '${StackNagFunction.Arn}'
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt [StackNagPostEventRule, Arn]
@@ -80,18 +80,18 @@ Resources:
   StackNagMetricsEventRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub "${AWS::StackName}-metrics-trigger"
+      Name: !Sub '${AWS::StackName}-metrics-trigger'
       ScheduleExpression: rate(10 minutes)
       State: ENABLED
       Targets:
-      - Arn: !Sub "${StackNagFunction.Arn}"
-        Id: "StackNagFunction"
-        Input: "{\"action\": \"metrics\"}"
+        - Arn: !Sub '${StackNagFunction.Arn}'
+          Id: 'StackNagFunction'
+          Input: '{"action": "metrics"}'
 
   StackNagMetricsEventRulePermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Sub "${StackNagFunction.Arn}"
+      FunctionName: !Sub '${StackNagFunction.Arn}'
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt [StackNagMetricsEventRule, Arn]
@@ -99,31 +99,32 @@ Resources:
   StackNagCodeBuildEventRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub "${AWS::StackName}-codebuild-trigger"
+      Name: !Sub '${AWS::StackName}-codebuild-trigger'
       State: ENABLED
       EventPattern:
         detail-type:
-          - "CodeBuild Build State Change"
+          - 'CodeBuild Build State Change'
         source:
-          - "aws.codebuild"
+          - 'aws.codebuild'
         detail:
           current-phase:
-            - "SUBMITTED"
-            - "COMPLETED"
+            - 'SUBMITTED'
+            - 'COMPLETED'
       Targets:
-      - Arn: !Sub "${StackNagFunction.Arn}"
-        Id: "StackNagFunction"
+        - Arn: !Sub '${StackNagFunction.Arn}'
+          Id: 'StackNagFunction'
 
   StackNagCodeBuildEventRulePermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Sub "${StackNagFunction.Arn}"
+      FunctionName: !Sub '${StackNagFunction.Arn}'
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt [StackNagCodeBuildEventRule, Arn]
 
   StackNagLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: 'Delete'
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-function"
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-function'
       RetentionInDays: 60
