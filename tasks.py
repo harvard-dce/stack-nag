@@ -5,9 +5,7 @@ from os import symlink, getenv as env
 from os.path import join, dirname, exists
 from dotenv import load_dotenv
 import json
-import requests
-import jmespath
-from pprint import pprint
+import time
 import sys
 
 load_dotenv(join(dirname(__file__), '.env'))
@@ -30,12 +28,12 @@ def create(ctx):
         return
 
     __generate_index(ctx)
-    __create_or_update(ctx, "create")
+    __create_or_update(ctx, "create-stack")
 
 
 @task
 def update(ctx):
-    __create_or_update(ctx, "update")
+    __create_or_update(ctx, "create-change-set")
 
 
 @task
@@ -57,7 +55,7 @@ def delete(ctx):
     res = ctx.run(cmd)
 
     if res.exited == 0:
-        __wait_for(ctx, "delete")
+        __wait_for(ctx, "stack-delete-complete")
 
     cmd = "aws {} s3 rm s3://{}/{}/stack-nag.zip"\
         .format(profile_arg(), getenv("LAMBDA_CODE_BUCKET"), STACK_NAME)
@@ -106,14 +104,22 @@ def profile_arg():
 
 
 def __create_or_update(ctx, op):
-    if op == "create" and stack_exists(ctx):
+    if op == "create-stack" and stack_exists(ctx):
         raise Exit("Stack already exists!")
     else:
         __package(ctx)
 
-        cmd = ("aws {} cloudformation {}-stack "
+        if op == "create-change-set":
+          change_set_name_arg = f"--change-set-name stack-nag-{str(int(time.time()))} "
+          wait_for_op = "change-set-create-complete"
+        else:
+          change_set_name_arg = ""
+          wait_for_op = "stack-create-complete"
+
+        cmd = ("aws {} cloudformation {} "
                "--capabilities CAPABILITY_NAMED_IAM "
                "--stack-name {} "
+               "{}"
                "--template-body file://template.yml "
                "--parameters "
                "ParameterKey=LambdaCodeBucket,ParameterValue={} "
@@ -124,6 +130,7 @@ def __create_or_update(ctx, op):
                .format(profile_arg(),
                        op,
                        STACK_NAME,
+                       change_set_name_arg,
                        getenv('LAMBDA_CODE_BUCKET'),
                        getenv('PRICE_NOTIFY_URL'),
                        getenv('CODEBUILD_NOTIFY_URL'),
@@ -134,7 +141,7 @@ def __create_or_update(ctx, op):
         res = ctx.run(cmd)
 
         if res.exited == 0:
-            __wait_for(ctx, op)
+            __wait_for(ctx, wait_for_op)
 
 
 def __package(ctx):
@@ -176,7 +183,7 @@ def __package(ctx):
 
 
 def __wait_for(ctx, op):
-    wait_cmd = ("aws {} cloudformation wait stack-{}-complete "
+    wait_cmd = ("aws {} cloudformation wait {} "
                 "--stack-name {}").format(profile_arg(), op, STACK_NAME)
     print("Waiting for stack {} to complete...".format(op))
     ctx.run(wait_cmd)
@@ -227,4 +234,3 @@ def __generate_index(ctx):
 
         with open('price_index.json', 'w') as f:
             json.dump(price_index, f, indent=True)
-    sys.exit(0)
