@@ -2,3 +2,5 @@ boto3
 jmespath
 requests
 python-dotenv
+invoke
+cfn-lint
