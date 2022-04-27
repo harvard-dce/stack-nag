@@ -38,12 +38,30 @@ Resources:
               - Effect: 'Allow'
                 Action:
                   - 'cloudwatch:PutMetricData'
+                  - 'SNS:Publish'
                 Resource: '*'
 
   StackNagSnsTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub '${AWS::StackName}-notifications'
+
+  StackNagSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref StackNagSnsTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: 'sns:Publish'
+            Resource: !Ref StackNagSnsTopic
+            Principal:
+              AWS: '*'
+            Condition:
+              ArnLike:
+                AWS::SourceArn: !Sub 'arn:aws:*:*:${AWS::AccountId}:*'
 
   StackNagFunction:
     Type: AWS::Lambda::Function

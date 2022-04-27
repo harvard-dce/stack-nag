@@ -27,7 +27,7 @@ cw = boto3.client("cloudwatch")
 ec2 = boto3.client("ec2")
 rds = boto3.client("rds")
 s3 = boto3.resource("s3")
-sns = boto3.resource("sns")
+sns = boto3.client("sns")
 SNS_NOTIFICATION_TOPIC = env("SNS_NOTIFICATION_TOPIC")
 PRICE_NOTIFY_URL = env("PRICE_NOTIFY_URL")
 CODEBUILD_NOTIFY_URL = env("CODEBUILD_NOTIFY_URL")
@@ -149,8 +149,10 @@ def handler(event, context):
 
         post_message(msg, CODEBUILD_NOTIFY_URL, color=status_color)
         if status in ["FAILED", "SUCCEEDED"]:
-            msg_body = f"{msg}\n\n{json.dumps(event, indent=2)}"
-            publish_to_sns(f"[codebuild] {project_name} build {status}!", msg_body)
+            details = json.dumps(event, indent=2)
+            msg_body = f"Project: {project_name}\nRevision: {revision}\nBuild: {build_link}\n\n{details}"
+            msg_subject = f"{project_name} build {status}!"
+            publish_to_sns(msg_subject, msg_body)
 
     else:
         raise RuntimeError("Received invalid event: {}".format(event))
