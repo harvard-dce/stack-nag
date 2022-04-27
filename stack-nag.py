@@ -27,6 +27,8 @@ cw = boto3.client("cloudwatch")
 ec2 = boto3.client("ec2")
 rds = boto3.client("rds")
 s3 = boto3.resource("s3")
+sns = boto3.resource("sns")
+SNS_NOTIFICATION_TOPIC = env("SNS_NOTIFICATION_TOPIC")
 PRICE_NOTIFY_URL = env("PRICE_NOTIFY_URL")
 CODEBUILD_NOTIFY_URL = env("CODEBUILD_NOTIFY_URL")
 NAMESPACE = env("NAMESPACE")
@@ -146,6 +148,9 @@ def handler(event, context):
             status_color = YELLOW
 
         post_message(msg, CODEBUILD_NOTIFY_URL, color=status_color)
+        if status in ["FAILED", "SUCCEEDED"]:
+            msg_body = f"{msg}\n\n{json.dumps(event, indent=2)}"
+            publish_to_sns(f"[codebuild] {project_name} build {status}!", msg_body)
 
     else:
         raise RuntimeError("Received invalid event: {}".format(event))
@@ -261,6 +266,21 @@ def post_message(msg, notify_url, color):
     logger.info("posting message: {}".format(msg))
     r = requests.post(notify_url, headers={"Content-Type": "application/json"}, json=req_body)
     logger.info("Notify url status code: {}".format(r.status_code))
+
+
+def publish_to_sns(subject, msg):
+    logger.debug({"sns message": msg})
+    logger.info("publishing alert to topic {}".format(SNS_NOTIFICATION_TOPIC))
+
+    try:
+        resp = sns.publish(
+            TopicArn=SNS_NOTIFICATION_TOPIC,
+            Subject=subject,
+            Message=msg,
+        )
+        logger.debug(f"message published: {resp}")
+    except Exception as e:
+        logger.error(f"Error sending to sns: {e}")
 
 
 def publish_metrics(stack):

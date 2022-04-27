@@ -134,10 +134,11 @@ def __create_or_update(ctx, op):
             )
         )
 
+        print(cmd)
         res = ctx.run(cmd)
 
         if res.exited == 0:
-            __wait_for(ctx, wait_for_op)
+            __wait_for(ctx, wait_for_op, change_set_name_arg)
 
 
 def __package(ctx):
@@ -179,8 +180,8 @@ def __package(ctx):
     )
 
 
-def __wait_for(ctx, op):
-    wait_cmd = ("aws {} cloudformation wait {} " "--stack-name {}").format(profile_arg(), op, STACK_NAME)
+def __wait_for(ctx, op, change_set_name_arg=""):
+    wait_cmd = f"aws {profile_arg()} cloudformation wait {op} --stack-name {STACK_NAME} {change_set_name_arg}"
     print("Waiting for stack {} to complete...".format(op))
     ctx.run(wait_cmd)
     print("Done")

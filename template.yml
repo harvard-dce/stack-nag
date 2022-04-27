@@ -40,6 +40,11 @@ Resources:
                   - 'cloudwatch:PutMetricData'
                 Resource: '*'
 
+  StackNagSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-notifications'
+
   StackNagFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -53,6 +58,7 @@ Resources:
           NAMESPACE: !Ref CWNamespace
           PRICE_NOTIFY_URL: !Ref PriceNotifyUrl
           CODEBUILD_NOTIFY_URL: !Ref CodeBuildNotifyUrl
+          SNS_NOTIFICATION_TOPIC: !Ref StackNagSnsTopic
       Code:
         S3Bucket: !Ref LambdaCodeBucket
         S3Key: !Sub '${AWS::StackName}/stack-nag.zip'
