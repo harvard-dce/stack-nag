@@ -30,8 +30,7 @@ s3 = boto3.resource("s3")
 sns = boto3.client("sns")
 SNS_NOTIFICATION_TOPIC = env("SNS_NOTIFICATION_TOPIC")
 PRICE_NOTIFY_URL = env("PRICE_NOTIFY_URL")
-CODEBUILD_NOTIFY_URL = env("CODEBUILD_NOTIFY_URL")
-NAMESPACE = env("NAMESPACE")
+NAMESPACE = env("CLOUDWATCH_NAMESPACE")
 
 YELLOW = "#EBB424"
 GREEN = "#49C39E"
@@ -119,40 +118,6 @@ def handler(event, context):
         # publish individual metrics
         for s in stacks:
             publish_metrics(s)
-
-    elif "source" in event and event["source"] == "aws.codebuild":
-        project_name = event["detail"]["project-name"]
-        revision = event["detail"]["additional-information"]["source-version"]
-
-        build_id = event["detail"]["build-id"]
-        build_id_parts = build_id.split(":", 5)
-        build_region = build_id_parts[3]
-        build_account = build_id_parts[4]
-        build_path = build_id_parts[5]
-        build_link = f"https://{build_region}.console.aws.amazon.com/codesuite/codebuild/{build_account}/projects/{project_name}/{build_path}"
-
-        if event["detail"]["current-phase"] == "SUBMITTED":
-            msg = f"CodeBuild submitted for <{build_link}|{project_name}@{revision}>"
-            status = None
-        elif event["detail"]["current-phase"] == "COMPLETED":
-            status = event["detail"]["build-status"]
-            msg = f"CodeBuild complete for <{build_link}|{project_name}@{revision}>, status: {status}"
-        else:
-            raise RuntimeError("Received invalid event: {}".format(event))
-
-        if status == "FAILED":
-            status_color = RED
-        elif status == "SUCCEEDED":
-            status_color = GREEN
-        else:
-            status_color = YELLOW
-
-        post_message(msg, CODEBUILD_NOTIFY_URL, color=status_color)
-        if status in ["FAILED", "SUCCEEDED"]:
-            details = json.dumps(event, indent=2)
-            msg_body = f"Project: {project_name}\nRevision: {revision}\nBuild: {build_link}\n\n{details}"
-            msg_subject = f"{project_name} build {status}!"
-            publish_to_sns(msg_subject, msg_body)
 
     else:
         raise RuntimeError("Received invalid event: {}".format(event))

@@ -4,18 +4,17 @@ StackNag is a simple Slack integration that:
 - Sends notifications about running OpsWorks stacks, the hourly costs of their associated resources,
 and "total usage" cost that includes resources from non-running stacks
 (ebs volumes, rds instances, s3 buckets, etc).
-- Sends notifications about CodeBuild build submissions.
-- Generates AWS cost metrics and posts these metrics to CloudWatch. 
+- Generates AWS cost metrics and posts these metrics to CloudWatch.
 Currently it publishes metrics for hourly cost breakdowns by service, as well as
 a total hourly cost, number of running stacks and total stacks.
 
 ## Setup
 
-1. Follow the instructions to create a Slack App and generate an 
+1. Follow the instructions to create a Slack App and generate an
 Incoming Webhook URL:
 
     https://api.slack.com/incoming-webhooks
-    
+
     Create a webhook for each slack channel you would like to post to.
 
 2. Copy example.env to .env and fill it in.

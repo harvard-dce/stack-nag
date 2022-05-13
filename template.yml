@@ -6,11 +6,7 @@ Parameters:
     Type: String
   PriceNotifyUrl:
     Type: String
-  CodeBuildNotifyUrl:
-    Type: String
   CWNamespace:
-    Type: String
-  NotifyScheduleExpression:
     Type: String
 
 Resources:
@@ -75,7 +71,6 @@ Resources:
         Variables:
           NAMESPACE: !Ref CWNamespace
           PRICE_NOTIFY_URL: !Ref PriceNotifyUrl
-          CODEBUILD_NOTIFY_URL: !Ref CodeBuildNotifyUrl
           SNS_NOTIFICATION_TOPIC: !Ref StackNagSnsTopic
       Code:
         S3Bucket: !Ref LambdaCodeBucket
@@ -85,8 +80,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub '${AWS::StackName}-post-trigger'
-      ScheduleExpression:
-        !Join [',', !Split ['x', !Ref NotifyScheduleExpression]]
+      ScheduleExpression: cron(0 16,20,0 * * ? *)
       State: ENABLED
       Targets:
         - Arn: !Sub '${StackNagFunction.Arn}'
@@ -119,32 +113,6 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt [StackNagMetricsEventRule, Arn]
-
-  StackNagCodeBuildEventRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub '${AWS::StackName}-codebuild-trigger'
-      State: ENABLED
-      EventPattern:
-        detail-type:
-          - 'CodeBuild Build State Change'
-        source:
-          - 'aws.codebuild'
-        detail:
-          current-phase:
-            - 'SUBMITTED'
-            - 'COMPLETED'
-      Targets:
-        - Arn: !Sub '${StackNagFunction.Arn}'
-          Id: 'StackNagFunction'
-
-  StackNagCodeBuildEventRulePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Sub '${StackNagFunction.Arn}'
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt [StackNagCodeBuildEventRule, Arn]
 
   StackNagLogGroup:
     Type: AWS::Logs::LogGroup
