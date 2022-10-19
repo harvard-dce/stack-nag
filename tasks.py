@@ -120,6 +120,7 @@ def __create_or_update(ctx, op):
             "ParameterKey=LambdaCodeBucket,ParameterValue={} "
             "ParameterKey=PriceNotifyUrl,ParameterValue={} "
             "ParameterKey=CWNamespace,ParameterValue={} "
+            "ParameterKey=LambdaSchedule,ParameterValue='{}' "
         ).format(
             profile_arg(),
             op,
@@ -128,6 +129,7 @@ def __create_or_update(ctx, op):
             getenv("LAMBDA_CODE_BUCKET"),
             getenv("PRICE_NOTIFY_URL"),
             getenv("CLOUDWATCH_NAMESPACE"),
+            getenv("LAMBDA_SCHEDULE").replace(",", r"\,"),
         )
 
         print(cmd)

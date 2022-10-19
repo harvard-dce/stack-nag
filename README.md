@@ -23,4 +23,4 @@ Incoming Webhook URL:
 
 4. Create the S3 a bucket to hold the Lambda code if it does not already exist.
 
-5. Run `invoke stack.create` to create the CloudFormation stack.
+5. Run `invoke stack.create` to create the CloudFormation stack. For the prod version you must set `AWS_PROFILE=prod` (or whatever your prod credentials profile is called).
